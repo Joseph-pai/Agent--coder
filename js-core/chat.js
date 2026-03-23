@@ -170,9 +170,13 @@ Rules:
     _phase = 'planning';
     setUIState('generating');
 
-    _messages = [
+    // Persist conversation history
+    _messages.push({ role: 'user', content: userText });
+
+    // Dynamically build payload with the Plan System Prompt
+    const payload = [
       { role: 'system', content: systemOverride || PLAN_SYSTEM },
-      { role: 'user',   content: userText },
+      ..._messages
     ];
 
     const bodyEl = createAiMessageEl();
@@ -180,7 +184,7 @@ Rules:
     _abortCtrl = new AbortController();
 
     try {
-      for await (const delta of API.stream(_model, _messages, _abortCtrl.signal)) {
+      for await (const delta of API.stream(_model, payload, _abortCtrl.signal)) {
         fullText += delta;
         bodyEl.innerHTML = renderMarkdown(fullText);
         scrollToBottom();
@@ -215,14 +219,19 @@ Rules:
     setUIState('generating');
 
     _messages.push({ role: 'user', content: 'Please now generate all the files based on the plan above.' });
-    _messages[0] = { role: 'system', content: EXECUTE_SYSTEM };
+
+    // Dynamically build payload with the Execute System Prompt
+    const payload = [
+      { role: 'system', content: EXECUTE_SYSTEM },
+      ..._messages
+    ];
 
     const bodyEl = createAiMessageEl();
     let fullText = '';
     _abortCtrl = new AbortController();
 
     try {
-      for await (const delta of API.stream(_model, _messages, _abortCtrl.signal)) {
+      for await (const delta of API.stream(_model, payload, _abortCtrl.signal)) {
         fullText += delta;
         const preview = fullText
           .replace(/<FILE path="([^"]+)">([\s\S]*?)<\/FILE>/g, (_, p) =>
