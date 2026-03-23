@@ -157,7 +157,87 @@ const FileTree = (() => {
     renderTree(tree, container);
   }
 
-  // ── Public API ────────────────────────────────────────────────
+  // ── Public API (Dual Mode: IDB or Local) ──────────────────────
+  let _dirHandle = null;
+
+  function updateModeBadge() {
+    const badge = document.getElementById('fsModeBadge');
+    if (_dirHandle) {
+      badge.textContent = '💻 Local Folder';
+      badge.className = 'fs-mode-badge local';
+      badge.title = `Mounted: ${_dirHandle.name}`;
+      document.getElementById('clearFilesBtn').title = "Unmount Local Folder";
+    } else {
+      badge.textContent = '🗄️ IndexedDB';
+      badge.className = 'fs-mode-badge idb';
+      badge.title = 'Browser internal storage';
+      document.getElementById('clearFilesBtn').title = "Clear All Files";
+    }
+  }
+
+  // Local File System Recurse
+  async function readDirectoryRecursively(dirHandle, basePath = '') {
+    const files = {};
+    for await (const entry of dirHandle.values()) {
+      // Skip heavy or hidden directories
+      if (['node_modules', '.git', '.next', 'dist', 'build', '.vscode', '.idea'].includes(entry.name)) continue;
+
+      const fullPath = basePath ? `${basePath}/${entry.name}` : entry.name;
+      
+      if (entry.kind === 'file') {
+        const file = await entry.getFile();
+        if (file.size < 1000000) { // skip files > 1MB safely
+          try {
+            const text = await file.text();
+            files[fullPath] = { content: text, lang: detectLang(fullPath) };
+          } catch (e) {
+            // Probably binary, skip loading into text editor
+          }
+        }
+      } else if (entry.kind === 'directory') {
+        const subFiles = await readDirectoryRecursively(entry, fullPath);
+        Object.assign(files, subFiles);
+      }
+    }
+    return files;
+  }
+
+  async function getNestedFileHandle(dirHandle, path, create = false) {
+    const parts = path.split('/');
+    const fileName = parts.pop();
+    let currentHandle = dirHandle;
+    for (const part of parts) {
+      currentHandle = await currentHandle.getDirectoryHandle(part, { create });
+    }
+    return await currentHandle.getFileHandle(fileName, { create });
+  }
+
+  async function deleteNestedFile(dirHandle, path) {
+    const parts = path.split('/');
+    const fileName = parts.pop();
+    let currentHandle = dirHandle;
+    for (const part of parts) {
+      currentHandle = await currentHandle.getDirectoryHandle(part, { create: false });
+    }
+    await currentHandle.removeEntry(fileName);
+  }
+
+  async function mountLocalFolder() {
+    try {
+      _dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
+      _fs = {};
+      _selectedPath = null;
+      document.dispatchEvent(new CustomEvent('file:cleared'));
+      Toast.show('Loading folder...', 'info');
+      _fs = await readDirectoryRecursively(_dirHandle);
+      updateModeBadge();
+      render();
+      Toast.show(`Mounted: ${_dirHandle.name}`, 'success');
+    } catch (e) {
+      console.warn('Mount cancelled or failed', e);
+    }
+  }
+
   function selectFile(filePath) {
     _selectedPath = filePath;
     render();
@@ -172,15 +252,38 @@ const FileTree = (() => {
   async function writeFile(filePath, content) {
     const lang = detectLang(filePath);
     _fs[filePath] = { content, lang };
-    await DB.put(filePath, content, lang);
+    
+    if (_dirHandle) {
+      try {
+        const fileHandle = await getNestedFileHandle(_dirHandle, filePath, true);
+        const writable = await fileHandle.createWritable();
+        await writable.write(content);
+        await writable.close();
+      } catch (e) {
+        console.error('Failed to write local file:', e);
+        Toast.show(`Write failed: ${filePath}`, 'error');
+      }
+    } else {
+      await DB.put(filePath, content, lang);
+    }
+    
     render();
-    // Auto-select newly written file
     selectFile(filePath);
   }
 
   async function removeFile(filePath) {
     delete _fs[filePath];
-    await DB.remove(filePath);
+    
+    if (_dirHandle) {
+      try {
+        await deleteNestedFile(_dirHandle, filePath);
+      } catch(e) {
+        console.error('Failed to delete local file:', e);
+      }
+    } else {
+      await DB.remove(filePath);
+    }
+    
     if (_selectedPath === filePath) {
       _selectedPath = null;
       document.dispatchEvent(new CustomEvent('file:cleared'));
@@ -190,20 +293,40 @@ const FileTree = (() => {
   }
 
   async function clearAll() {
-    if (!confirm('Delete all files? This cannot be undone.')) return;
-    _fs = {};
-    _selectedPath = null;
-    await DB.clear();
-    render();
-    document.dispatchEvent(new CustomEvent('file:cleared'));
-    Toast.show('All files cleared', 'info');
+    if (_dirHandle) {
+      if (!confirm(`Unmount local folder "${_dirHandle.name}" and return to IndexedDB?`)) return;
+      _dirHandle = null;
+      _fs = {};
+      _selectedPath = null;
+      document.dispatchEvent(new CustomEvent('file:cleared'));
+      updateModeBadge();
+      
+      // Hydrate back from IDB
+      try {
+        const rows = await DB.getAll();
+        rows.forEach(row => { _fs[row.filePath] = { content: row.content, lang: row.lang }; });
+      } catch(e) {}
+      render();
+      Toast.show('Unmounted local folder', 'info');
+    } else {
+      if (!confirm('Delete all files in IndexedDB? This cannot be undone.')) return;
+      _fs = {};
+      _selectedPath = null;
+      await DB.clear();
+      render();
+      document.dispatchEvent(new CustomEvent('file:cleared'));
+      Toast.show('All files cleared', 'info');
+    }
   }
 
   function getAll() { return { ..._fs }; }
   function getSelectedPath() { return _selectedPath; }
 
   async function init() {
-    // Hydrate from IndexedDB
+    // Check initial state
+    updateModeBadge();
+    
+    // Hydrate from IndexedDB initially
     try {
       const rows = await DB.getAll();
       rows.forEach(row => {
@@ -230,9 +353,12 @@ const FileTree = (() => {
       writeFile(filePath.trim(), '');
     });
 
-    // Clear button
+    // Clear / Unmount button
     document.getElementById('clearFilesBtn').addEventListener('click', clearAll);
+    
+    // Open Local Folder button
+    document.getElementById('openLocalFolderBtn').addEventListener('click', mountLocalFolder);
   }
 
-  return { init, writeFile, removeFile, clearAll, getAll, getSelectedPath, selectFile, detectLang };
+  return { init, writeFile, removeFile, clearAll, getAll, getSelectedPath, selectFile, detectLang, mountLocalFolder };
 })();
