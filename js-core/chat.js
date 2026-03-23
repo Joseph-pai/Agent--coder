@@ -398,6 +398,21 @@ Rules:
       systemWrap.style.display = isHidden ? '' : 'none';
       toggleBtn.classList.toggle('open', isHidden);
     });
+
+    // Listen for Token Usage Event
+    document.addEventListener('api:usage', (e) => {
+      const { prompt, completion, model } = e.detail;
+      const history = document.getElementById('chatHistory');
+      const messages = history.querySelectorAll('.message.ai');
+      if (messages.length === 0) return;
+      const lastMsg = messages[messages.length - 1].querySelector('.message-body');
+      
+      const el = document.createElement('div');
+      el.className = 'token-usage-badge';
+      el.innerHTML = `本次耗用: <span class="val">${prompt + completion}</span> tokens (發送: ${prompt}, 接收: ${completion}) 模型: ${model}`;
+      lastMsg.appendChild(el);
+      scrollToBottom();
+    });
   }
 
   function setModel(model) { _model = model; }

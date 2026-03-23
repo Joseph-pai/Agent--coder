@@ -215,7 +215,10 @@
           <h3 class="settings-section-title">🤖 AI Models</h3>
           <div class="settings-group">
             <div class="form-group">
-              <label class="form-label"><span class="label-badge deepseek">DeepSeek</span> API Key</label>
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                <label class="form-label" style="margin:0;"><span class="label-badge deepseek">DeepSeek</span> API Key</label>
+                <button class="btn-test" id="testDeepseekBtn">Test Connection</button>
+              </div>
               <div class="input-password-wrap">
                 <input type="password" id="deepseekKeyInput" class="form-input" placeholder="sk-..." autocomplete="off" />
                 <button class="eye-btn" data-target="deepseekKeyInput">
@@ -225,7 +228,10 @@
               <span class="form-hint">platform.deepseek.com/api-keys</span>
             </div>
             <div class="form-group">
-              <label class="form-label"><span class="label-badge gemini">Gemini</span> API Key</label>
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                <label class="form-label" style="margin:0;"><span class="label-badge gemini">Gemini</span> API Key</label>
+                <button class="btn-test" id="testGeminiBtn">Test Connection</button>
+              </div>
               <div class="input-password-wrap">
                 <input type="password" id="geminiKeyInput" class="form-input" placeholder="AIza..." autocomplete="off" />
                 <button class="eye-btn" data-target="geminiKeyInput">
@@ -255,6 +261,26 @@
                   <option value="gemini-1.5-pro">gemini-1.5-pro</option>
                 </select>
               </div>
+            </div>
+          </div>
+        </div>
+        <div class="settings-section">
+          <h3 class="settings-section-title">⚙️ Advanced Parameters</h3>
+          <div class="settings-group">
+            <div class="form-group">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                <label class="form-label" style="margin:0;">AI Creativity (Temperature)</label>
+                <span id="tempValueDisplay" style="color:var(--accent-cyan);font-size:12px;font-weight:600;">0.7</span>
+              </div>
+              <input type="range" id="tempInput" class="form-range" min="0" max="2" step="0.1" value="0.7">
+              <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-top:4px;">
+                <span>Precise (0.0)</span><span>Balanced (1.0)</span><span>Creative (2.0)</span>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Max Output Tokens</label>
+              <input type="number" id="maxTokensInput" class="form-input" placeholder="8192 (Leave empty for no limit)" min="1" max="1000000" />
+              <span class="form-hint">Physical model limits apply (e.g. DeepSeek hits 8192 max). Leave empty to let the API decide.</span>
             </div>
           </div>
         </div>

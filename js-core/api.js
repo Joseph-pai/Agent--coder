@@ -23,6 +23,9 @@ const API = (() => {
     const key = getKey('deepseek');
     if (!key) throw new Error('DeepSeek API key not set. Please open Settings.');
 
+    const advanced = typeof Settings !== 'undefined' ? Settings.getAdvanced() : { temperature: 0.7, max_tokens: null };
+    const maxTokensPayload = advanced.max_tokens ? { max_tokens: advanced.max_tokens } : {};
+
     const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
       method: 'POST',
       signal,
@@ -34,8 +37,9 @@ const API = (() => {
         model: getSubModel('deepseek'),
         messages,
         stream: true,
-        temperature: 0.7,
-        max_tokens: 8192,
+        stream_options: { include_usage: true },
+        temperature: advanced.temperature,
+        ...maxTokensPayload
       }),
     });
 
@@ -60,6 +64,15 @@ const API = (() => {
         if (trimmed.startsWith('data: ')) {
           try {
             const json = JSON.parse(trimmed.slice(6));
+            if (json.usage) {
+               document.dispatchEvent(new CustomEvent('api:usage', {
+                 detail: {
+                   prompt: json.usage.prompt_tokens,
+                   completion: json.usage.completion_tokens,
+                   model: 'DeepSeek (' + getSubModel('deepseek') + ')'
+                 }
+               }));
+            }
             const delta = json.choices?.[0]?.delta?.content;
             if (delta) yield delta;
           } catch { /* skip malformed */ }
@@ -90,11 +103,14 @@ const API = (() => {
       }
     }
 
+    const advanced = typeof Settings !== 'undefined' ? Settings.getAdvanced() : { temperature: 0.7, max_tokens: null };
+    const maxTokensPayload = advanced.max_tokens ? { maxOutputTokens: advanced.max_tokens } : {};
+
     const body = {
       contents,
       generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 8192,
+        temperature: advanced.temperature,
+        ...maxTokensPayload
       },
     };
     if (systemInstruction) body.systemInstruction = systemInstruction;
@@ -129,6 +145,15 @@ const API = (() => {
         if (trimmed.startsWith('data: ')) {
           try {
             const json = JSON.parse(trimmed.slice(6));
+            if (json.usageMetadata) {
+               document.dispatchEvent(new CustomEvent('api:usage', {
+                 detail: {
+                   prompt: json.usageMetadata.promptTokenCount,
+                   completion: json.usageMetadata.candidatesTokenCount,
+                   model: 'Gemini (' + model + ')'
+                 }
+               }));
+            }
             const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
             if (text) yield text;
           } catch { /* skip */ }
