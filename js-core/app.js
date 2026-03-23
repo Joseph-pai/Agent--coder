@@ -34,8 +34,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   function applyModel(model) {
     localStorage.setItem('ag_active_model', model);
     Chat.setModel(model);
-    const badge = document.getElementById('modelBadge');
-    badge.textContent = model === 'deepseek' ? '🔷 DeepSeek' : '♊ Gemini';
   }
 
   const savedModel = localStorage.getItem('ag_active_model') || 'deepseek';
