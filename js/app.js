@@ -69,66 +69,64 @@ document.addEventListener('DOMContentLoaded', async () => {
     Toast.show(`Exported ${paths.length} file(s) as ZIP`, 'success');
   });
 
-  // ── Panel Resize (Bulltproof Version with Pointer Capture) ────
+  // ── Panel Resize (Classic Foolproof Version) ──────────────────
   const layout = document.getElementById('appLayout');
+  // Fallback widths
   let leftW = 260;
   let rightW = 380;
-  
-  // Initialize responsive widths based on screen size
   if (window.innerWidth >= 1920) { leftW = 280; rightW = 420; }
   else if (window.innerWidth <= 1280) { leftW = 220; rightW = 320; }
-  
-  function updateGrid() {
-    layout.style.gridTemplateColumns = `${leftW}px 4px 1fr 4px ${rightW}px`;
-  }
-  updateGrid(); // Apply immediately
 
-  function initDragHandle(handleId, minPx, maxPx, side) {
+  // Initial grid setup
+  layout.style.gridTemplateColumns = `${leftW}px 4px 1fr 4px ${rightW}px`;
+
+  function initDragHandle(handleId, panelId, minPx, maxPx, side) {
     const handle = document.getElementById(handleId);
+    const panel = document.getElementById(panelId);
     let dragging = false;
     let startX = 0;
     let startWidth = 0;
 
-    function onPointerMove(e) {
+    function onMouseMove(e) {
       if (!dragging) return;
       const delta = e.clientX - startX;
-      if (side === 'left') {
-        leftW = Math.max(minPx, Math.min(startWidth + delta, maxPx));
-      } else {
-        rightW = Math.max(minPx, Math.min(startWidth - delta, maxPx));
-      }
-      updateGrid();
+      let newW = side === 'left' ? startWidth + delta : startWidth - delta;
+      newW = Math.max(minPx, Math.min(newW, maxPx));
+      
+      if (side === 'left') leftW = newW;
+      else rightW = newW;
+      
+      // Update grid inline directly
+      layout.style.gridTemplateColumns = `${leftW}px 4px 1fr 4px ${rightW}px`;
     }
 
-    function onPointerUp(e) {
+    function onMouseUp() {
       if (!dragging) return;
       dragging = false;
       handle.classList.remove('dragging');
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
-      try { handle.releasePointerCapture(e.pointerId); } catch(err) {}
-      handle.removeEventListener('pointermove', onPointerMove);
-      handle.removeEventListener('pointerup', onPointerUp);
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
     }
 
-    handle.addEventListener('pointerdown', (e) => {
+    handle.addEventListener('mousedown', (e) => {
       e.preventDefault();
       dragging = true;
       startX = e.clientX;
-      startWidth = side === 'left' ? leftW : rightW;
+      startWidth = panel.getBoundingClientRect().width;
       
       handle.classList.add('dragging');
       document.body.style.cursor = 'col-resize';
       document.body.style.userSelect = 'none';
       
-      handle.setPointerCapture(e.pointerId);
-      handle.addEventListener('pointermove', onPointerMove);
-      handle.addEventListener('pointerup', onPointerUp);
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
     });
   }
 
-  initDragHandle('dragLeft',  140, 600, 'left');
-  initDragHandle('dragRight', 200, 800, 'right');
+  initDragHandle('dragLeft', 'panelLeft', 140, 600, 'left');
+  initDragHandle('dragRight', 'panelRight', 200, 800, 'right');
 
   // ── Keyboard Shortcuts ─────────────────────────────────────
   document.addEventListener('keydown', (e) => {
