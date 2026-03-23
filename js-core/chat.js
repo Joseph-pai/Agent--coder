@@ -165,6 +165,21 @@ Rules:
     return files;
   }
 
+  // ── Workspace Context ─────────────────────────────────────────
+  function buildWorkspaceContext() {
+    const files = FileTree.getAll();
+    const paths = Object.keys(files);
+    if (paths.length === 0) return '';
+    
+    let ctx = '\n\n=== CURRENT WORKSPACE FILES ===\n';
+    ctx += '(You already have these files. Only generate files you need to modify or create.)\n';
+    paths.forEach(p => {
+      ctx += `\n--- ${p} ---\n${files[p].content}\n`;
+    });
+    ctx += '\n===============================\n';
+    return ctx;
+  }
+
   // ── Phase 1: Plan ─────────────────────────────────────────────
   async function runPlan(userText, systemOverride) {
     _phase = 'planning';
@@ -173,9 +188,12 @@ Rules:
     // Persist conversation history
     _messages.push({ role: 'user', content: userText });
 
-    // Dynamically build payload with the Plan System Prompt
+    // Dynamically build payload with the Plan System Prompt + Workspace
+    const baseSystem = systemOverride || PLAN_SYSTEM;
+    const systemContent = baseSystem + buildWorkspaceContext();
+    
     const payload = [
-      { role: 'system', content: systemOverride || PLAN_SYSTEM },
+      { role: 'system', content: systemContent },
       ..._messages
     ];
 
@@ -220,9 +238,10 @@ Rules:
 
     _messages.push({ role: 'user', content: 'Please now generate all the files based on the plan above.' });
 
-    // Dynamically build payload with the Execute System Prompt
+    // Dynamically build payload with the Execute System Prompt + Workspace
+    const systemContent = EXECUTE_SYSTEM + buildWorkspaceContext();
     const payload = [
-      { role: 'system', content: EXECUTE_SYSTEM },
+      { role: 'system', content: systemContent },
       ..._messages
     ];
 
